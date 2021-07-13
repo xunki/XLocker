@@ -8,6 +8,17 @@
 ```c#
 private static readonly LockManager LockManager = new(StackExchange.Redis.ConnectionMultiplexer.Connect("redis server:port"), "PREFIX", new LockSemaphoreManager());
 
+/// <summary>
+/// 初始化，调用一次即可
+/// </summary>
+public Task Init()
+{
+    return LockManager.SubscribeAsync();
+}
+
+/// <summary>
+/// 为执行逻辑加锁 
+/// </summary>
 public async Task Lock(string key, Func<Task> func)
 {
     var value = Guid.NewGuid().ToString("N")[..2];
