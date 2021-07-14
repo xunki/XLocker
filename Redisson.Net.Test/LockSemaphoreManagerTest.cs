@@ -11,7 +11,6 @@ namespace Redisson.Net.Test
     public class LockSemaphoreManagerTest
     {
         private readonly ITestOutputHelper _console;
-        private readonly LockSemaphoreManager _lockSemaphoreManager = new();
 
         public LockSemaphoreManagerTest(ITestOutputHelper console)
         {
@@ -41,13 +40,13 @@ namespace Redisson.Net.Test
         [Fact]
         public void Test()
         {
-            _lockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
-            _lockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
-            _lockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
-            _lockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
-            _lockSemaphoreManager.RecycleCache(TimeSpan.FromDays(1));
-            _lockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
-            _lockSemaphoreManager.RecycleCache(TimeSpan.FromSeconds(1));
+            LockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
+            LockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
+            LockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
+            LockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
+            LockSemaphoreManager.RecycleCache(TimeSpan.FromDays(1));
+            LockSemaphoreManager.WaitAsync("test", TimeSpan.FromMilliseconds(1));
+            LockSemaphoreManager.RecycleCache(TimeSpan.FromSeconds(1));
         }
 
         [Fact]
@@ -58,13 +57,13 @@ namespace Redisson.Net.Test
                 var sw = Stopwatch.StartNew();
                 var list = Enumerable.Range(1, 10000)
                     .Select(value => Task.Run(async () =>
-                        await _lockSemaphoreManager.WaitAsync(value.ToString(), TimeSpan.FromSeconds(1))
+                        await LockSemaphoreManager.WaitAsync(value.ToString(), TimeSpan.FromSeconds(1))
                     ))
                     .ToList();
                 await Task.WhenAll(list);
                 _console.WriteLine($"耗时：{sw.ElapsedMilliseconds}ms");
             }
-            await _lockSemaphoreManager.RecycleCache(TimeSpan.FromSeconds(1));
+            await LockSemaphoreManager.RecycleCache(TimeSpan.FromSeconds(1));
         }
     }
 }

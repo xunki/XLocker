@@ -8,18 +8,18 @@ using Redisson.Net.Model;
 
 namespace Redisson.Net
 {
-    public class LockSemaphoreManager
+    public static class LockSemaphoreManager
     {
-        private readonly ConcurrentDictionary<string, SemaphoreCache> _caches = new();
+        private static readonly ConcurrentDictionary<string, SemaphoreCache> Caches = new();
 
-        public async Task<bool> WaitAsync(string key, TimeSpan timeout)
+        public static async Task<bool> WaitAsync(string key, TimeSpan timeout)
         {
             var lastUsedTimestamp = Stopwatch.GetTimestamp();
 
             SemaphoreCache semaphoreCache;
             lock (string.Intern(key))
             {
-                if (_caches.TryGetValue(key, out semaphoreCache))
+                if (Caches.TryGetValue(key, out semaphoreCache))
                 {
                     if (semaphoreCache.LastUsedTimestamp < lastUsedTimestamp)
                         semaphoreCache.LastUsedTimestamp = lastUsedTimestamp;
@@ -31,7 +31,7 @@ namespace Redisson.Net
                         Semaphore = new SemaphoreSlim(0),
                         LastUsedTimestamp = lastUsedTimestamp
                     };
-                    if (!_caches.TryAdd(key, semaphoreCache))
+                    if (!Caches.TryAdd(key, semaphoreCache))
                     {
                         // 基本不存在下列情况
                         semaphoreCache.Dispose();
@@ -47,12 +47,12 @@ namespace Redisson.Net
             return await semaphoreCache.Semaphore.WaitAsync(timeout);
         }
 
-        public void Release(string key)
+        public static void Release(string key)
         {
             lock (string.Intern(key))
             {
                 // 已经不存在则忽略
-                if (!_caches.TryRemove(key, out var cache))
+                if (!Caches.TryRemove(key, out var cache))
                     return;
 
                 cache.Dispose();
@@ -63,21 +63,21 @@ namespace Redisson.Net
         /// <summary>
         /// 最后回收锁的Ticks
         /// </summary>
-        private long _lastRecycleCacheTicks;
+        private static long _lastRecycleCacheTicks;
 
         /// <summary>
         /// 回收缓存锁
         /// </summary>
-        private readonly SemaphoreSlim _recycleCacheLocker = new(1);
+        private static readonly SemaphoreSlim RecycleCacheLocker = new(1);
 
         /// <summary>
         /// 回收锁缓存
         /// </summary>
         /// <param name="expireInterval">过期间隔</param>
-        public async Task RecycleCache(TimeSpan expireInterval)
+        public static async Task RecycleCache(TimeSpan expireInterval)
         {
             // 1 秒内没有获取到执行锁则忽略本次回收
-            var gotLock = await _recycleCacheLocker.WaitAsync(TimeSpan.FromSeconds(1));
+            var gotLock = await RecycleCacheLocker.WaitAsync(TimeSpan.FromSeconds(1));
             if (!gotLock) return;
 
             try
@@ -85,7 +85,7 @@ namespace Redisson.Net
                 var expireIntervalTicks = Stopwatch.GetTimestamp() - expireInterval.Ticks;
                 if (expireIntervalTicks < _lastRecycleCacheTicks) return;
 
-                var expireCacheKeys = _caches
+                var expireCacheKeys = Caches
                     .Where(kv => kv.Value.LastUsedTimestamp < expireIntervalTicks)
                     .Select(kv => kv.Key)
                     .ToArray();
@@ -102,14 +102,14 @@ namespace Redisson.Net
             }
             finally
             {
-                _recycleCacheLocker.Release();
+                RecycleCacheLocker.Release();
             }
         }
 
         /// <summary>
         /// 启动回收任务 (请勿重复开启)
         /// </summary>
-        public Task StartRecycleTask(TimeSpan recycleInterval, TimeSpan expireInterval)
+        public static Task StartRecycleTask(TimeSpan recycleInterval, TimeSpan expireInterval)
         {
             const long RECYCLE_CACHE_SIZE = 5000;
 
@@ -118,7 +118,7 @@ namespace Redisson.Net
             {
                 do
                 {
-                    if (_caches.Count > RECYCLE_CACHE_SIZE || DateTime.Now - lastRecycleCacheTime > recycleInterval)
+                    if (Caches.Count > RECYCLE_CACHE_SIZE || DateTime.Now - lastRecycleCacheTime > recycleInterval)
                         await RecycleCache(expireInterval);
 
                     await Task.Delay(TimeSpan.FromSeconds(1));

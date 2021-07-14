@@ -17,13 +17,18 @@ namespace Redisson.Net.Model
 
         public void Dispose()
         {
-            Semaphore?.Release(int.MaxValue);
+            DisposeImpl();
             GC.SuppressFinalize(this);
+        }
+
+        private void DisposeImpl()
+        {
+            Semaphore?.Release(int.MaxValue);
         }
 
         ~SemaphoreCache()
         {
-            Dispose();
+            DisposeImpl();
         }
     }
 }

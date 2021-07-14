@@ -1,38 +1,76 @@
 ﻿using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading.Tasks;
 using StackExchange.Redis;
 
 namespace Redisson.Net
 {
-    public class LockManager
+    public class LockManager : IDisposable
     {
-        public LockManager(ConnectionMultiplexer redis, string prefix, LockSemaphoreManager lockSemaphoreManager)
+        #region 初始化及释放
+        public static LockManager GetLockManager(ConnectionMultiplexer redis, string prefix)
+        {
+            // 注册解锁事件
+            redis.GetSubscriber().Subscribe(prefix + "*", UnlockEvent);
+            // 注册脚本 [暂时支持单节点，目前测试用，后期会优化]
+            var server = redis.GetServer(redis.GetEndPoints().First());
+            var lockScript = new RedisScript.Lock().LoadScript(server);
+            var unLockScript = new RedisScript.UnLock().LoadScript(server);
+
+            return new LockManager(redis, prefix, lockScript, unLockScript);
+        }
+
+        public static async Task<LockManager> GetLockManagerAsync(ConnectionMultiplexer redis, string prefix)
+        {
+            // 注册解锁事件
+            await redis.GetSubscriber().SubscribeAsync(prefix + "*", UnlockEvent);
+            // 注册脚本 [暂时支持单节点，目前测试用，后期会优化]
+            var server = redis.GetServer(redis.GetEndPoints().First());
+            var lockScript = await new RedisScript.Lock().LoadScriptAsync(server);
+            var unLockScript = await new RedisScript.UnLock().LoadScriptAsync(server);
+
+            return new LockManager(redis, prefix, lockScript, unLockScript);
+        }
+
+        private static void UnlockEvent(RedisChannel key, RedisValue value)
+        {
+            LockSemaphoreManager.Release(key);
+        }
+
+        public void Dispose()
+        {
+            DisposeImpl();
+            GC.SuppressFinalize(this);
+        }
+
+        ~LockManager()
+        {
+            Dispose();
+        }
+
+        private void DisposeImpl()
+        {
+            if (_redis != null)
+            {
+                if (_redis.IsConnecting)
+                    _redis.GetSubscriber().UnsubscribeAsync(_prefix + "*");
+                _redis.Dispose();
+            }
+        }
+
+        private LockManager(ConnectionMultiplexer redis, string prefix, LoadedLuaScript lockScript, LoadedLuaScript unLockScript)
         {
             _redis = redis;
-            _prefix = prefix + "LOCK:";
-            _lockSemaphoreManager = lockSemaphoreManager;
+            _prefix = prefix;
+            _lockScript = lockScript;
+            _unLockScript = unLockScript;
         }
 
         private readonly ConnectionMultiplexer _redis;
         private readonly string _prefix;
-        private readonly LockSemaphoreManager _lockSemaphoreManager;
-
-        #region 注册订阅/取消订阅解锁事件
-        public Task SubscribeAsync()
-        {
-            return _redis.GetSubscriber().SubscribeAsync(_prefix + "*", UnlockEvent);
-        }
-
-        public Task Unsubscribe()
-        {
-            return _redis.GetSubscriber().UnsubscribeAsync(_prefix + "*");
-        }
-
-        private void UnlockEvent(RedisChannel key, RedisValue value)
-        {
-            _lockSemaphoreManager.Release(key);
-        }
+        private readonly LoadedLuaScript _lockScript;
+        private readonly LoadedLuaScript _unLockScript;
         #endregion
 
         public async Task<bool> Lock(string key, string value, TimeSpan expire, TimeSpan lockTimeout)
@@ -42,11 +80,14 @@ namespace Redisson.Net
 
             do
             {
-                // 以下指令可以通过脚本进行一次性操作
-                var success = await _redis.GetDatabase().LockTakeAsync(key, value, expire);
-                if (success)
+                var ttl = (int?) await _lockScript.EvaluateAsync(_redis.GetDatabase(), new RedisScript.Lock
+                {
+                    Key = key,
+                    Value = value,
+                    Expire = (int) expire.TotalMilliseconds
+                });
+                if (ttl is null or 0)
                     return true;
-                var ttl = await _redis.GetDatabase().KeyTimeToLiveAsync(key);
 
                 // 进行锁等待
                 var nowTicks = Stopwatch.GetTimestamp();
@@ -54,15 +95,21 @@ namespace Redisson.Net
                     return false;
 
                 var waitTimeSpan = new TimeSpan(timeoutTicks - nowTicks);
-                if (ttl != null && ttl.Value < waitTimeSpan)
-                    waitTimeSpan = ttl.Value;
+                if (ttl >= 0 && ttl.Value < waitTimeSpan.TotalMilliseconds)
+                    waitTimeSpan = TimeSpan.FromMilliseconds(ttl.Value);
 
-                var waitTask = _lockSemaphoreManager.WaitAsync(key, waitTimeSpan);
+                var waitTask = LockSemaphoreManager.WaitAsync(key, waitTimeSpan);
 
                 // 再进行一次锁定，如果失败则进行等待，避免在等待本地锁生成前，已触发本地锁释放事件
-                success = await _redis.GetDatabase().LockTakeAsync(key, value, expire);
-                if (success)
+                var ttl2 = (int?) await _lockScript.EvaluateAsync(_redis.GetDatabase(), new RedisScript.Lock
+                {
+                    Key = key,
+                    Value = value,
+                    Expire = (int) expire.TotalMilliseconds
+                });
+                if (ttl2 is null or 0)
                     return true;
+
                 await waitTask;
             } while (true);
         }
@@ -70,12 +117,12 @@ namespace Redisson.Net
         public async Task<bool> UnLock(string key, string value)
         {
             key = _prefix + key;
-
-            // 以下指令可以通过脚本进行一次性操作
-            var success = await _redis.GetDatabase().LockReleaseAsync(key, value);
-            if (success)
-                await _redis.GetSubscriber().PublishAsync(key, "");
-            return success;
+            var result = (int?) await _unLockScript.EvaluateAsync(_redis.GetDatabase(), new RedisScript.UnLock
+            {
+                Key = key,
+                Value = value
+            });
+            return result.HasValue;
         }
     }
 }
