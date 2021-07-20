@@ -1,27 +1,16 @@
 ﻿using System;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using StackExchange.Redis;
 
-namespace Redisson.Net
+namespace XLocker
 {
     public class LockManager : IDisposable
     {
         #region 初始化及释放
-        public static LockManager GetLockManager(ConnectionMultiplexer redis, string prefix)
-        {
-            // 注册解锁事件
-            redis.GetSubscriber().Subscribe(prefix + "*", UnlockEvent);
-            // 注册脚本 [暂时支持单节点，目前测试用，后期会优化]
-            var server = redis.GetServer(redis.GetEndPoints().First());
-            var lockScript = new RedisScript.Lock().LoadScript(server);
-            var unLockScript = new RedisScript.UnLock().LoadScript(server);
-
-            return new LockManager(redis, prefix, lockScript, unLockScript);
-        }
-
-        public static async Task<LockManager> GetLockManagerAsync(ConnectionMultiplexer redis, string prefix)
+        public static async Task<LockManager> GetLockManagerAsync(ConnectionMultiplexer redis, string prefix = "LOCK:")
         {
             // 注册解锁事件
             await redis.GetSubscriber().SubscribeAsync(prefix + "*", UnlockEvent);
@@ -73,7 +62,8 @@ namespace Redisson.Net
         private readonly LoadedLuaScript _unLockScript;
         #endregion
 
-        public async Task<bool> Lock(string key, string value, TimeSpan expire, TimeSpan lockTimeout)
+        #region 基础锁逻辑
+        public async Task<bool> LockAsync(string key, string value, TimeSpan expire, TimeSpan lockTimeout)
         {
             key = _prefix + key;
             var timeoutTicks = Stopwatch.GetTimestamp() + lockTimeout.Ticks;
@@ -114,7 +104,7 @@ namespace Redisson.Net
             } while (true);
         }
 
-        public async Task<bool> UnLock(string key, string value)
+        public async Task<bool> UnLockAsync(string key, string value)
         {
             key = _prefix + key;
             var result = (int?) await _unLockScript.EvaluateAsync(_redis.GetDatabase(), new RedisScript.UnLock
@@ -123,6 +113,25 @@ namespace Redisson.Net
                 Value = value
             });
             return result.HasValue;
+        }
+        #endregion
+
+        private static readonly AsyncLocal<string> LogicLockContext = new();
+
+        public Task<bool> LockAsync(string key, TimeSpan expire, TimeSpan lockTimeout)
+        {
+            var guid = LogicLockContext.Value;
+            if (string.IsNullOrEmpty(guid))
+            {
+                guid = Guid.NewGuid().ToString("N");
+                LogicLockContext.Value = guid;
+            }
+            return LockAsync(key, guid, expire, lockTimeout);
+        }
+
+        public Task<bool> UnLockAsync(string key)
+        {
+            return UnLockAsync(key, LogicLockContext.Value);
         }
     }
 }

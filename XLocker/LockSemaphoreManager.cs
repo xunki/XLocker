@@ -4,9 +4,9 @@ using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Redisson.Net.Model;
+using XLocker.Model;
 
-namespace Redisson.Net
+namespace XLocker
 {
     public static class LockSemaphoreManager
     {

@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Threading;
 
-namespace Redisson.Net.Model
+namespace XLocker.Model
 {
     public class SemaphoreCache : IDisposable
     {

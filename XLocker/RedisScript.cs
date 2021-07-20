@@ -1,7 +1,7 @@
 ﻿using System.Threading.Tasks;
 using StackExchange.Redis;
 
-namespace Redisson.Net
+namespace XLocker
 {
     // ReSharper disable StringLiteralTypo
     internal abstract class RedisScript

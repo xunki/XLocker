@@ -1,5 +1,5 @@
-# Redisson.Net
-redisson implement by .NET5
+# XLocker
+like [RedissonLock](https://github.com/redisson/redisson/blob/master/redisson/src/main/java/org/redisson/RedissonLock.java) implement by dotnet
 
 [中文](README.md)
 

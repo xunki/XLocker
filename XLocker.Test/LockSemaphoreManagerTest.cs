@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Redisson.Net.Test
+namespace XLocker.Test
 {
     public class LockSemaphoreManagerTest
     {

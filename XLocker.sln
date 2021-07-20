@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XLocker.Test", "XLocker.Test\XLocker.Test.csproj", "{6EDF738F-6878-46F2-B7EF-5FF5D470DD76}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "XLocker", "XLocker\XLocker.csproj", "{D570AAC9-CEC3-45CD-99AC-5DD1AB226597}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{6EDF738F-6878-46F2-B7EF-5FF5D470DD76}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6EDF738F-6878-46F2-B7EF-5FF5D470DD76}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6EDF738F-6878-46F2-B7EF-5FF5D470DD76}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6EDF738F-6878-46F2-B7EF-5FF5D470DD76}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D570AAC9-CEC3-45CD-99AC-5DD1AB226597}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D570AAC9-CEC3-45CD-99AC-5DD1AB226597}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D570AAC9-CEC3-45CD-99AC-5DD1AB226597}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D570AAC9-CEC3-45CD-99AC-5DD1AB226597}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

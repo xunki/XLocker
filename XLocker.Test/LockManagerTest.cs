@@ -2,12 +2,13 @@
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using StackExchange.Redis;
 using Xunit;
 using Xunit.Abstractions;
 
-namespace Redisson.Net.Test
+namespace XLocker.Test
 {
     public class LockManagerTest
     {
@@ -19,7 +20,7 @@ namespace Redisson.Net.Test
         {
             _console = console;
             _redis = ConnectionMultiplexer.Connect("192.168.2.172:56379");
-            _lockManager = LockManager.GetLockManager(_redis, "LOCK:");
+            _lockManager = LockManager.GetLockManagerAsync(_redis).ConfigureAwait(false).GetAwaiter().GetResult();
         }
 
         [Fact]
@@ -38,14 +39,14 @@ namespace Redisson.Net.Test
         {
             var value = Guid.NewGuid().ToString("N")[..2];
             _console.WriteLine(value + " 等待加锁...");
-            var success = await _lockManager.Lock(key, value,
+            var success = await _lockManager.LockAsync(key, value,
                 TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(30));
             _console.WriteLine("{0} {1}", value, success ? "加锁成功" : "加锁失败");
 
             if (success)
             {
                 await func();
-                success = await _lockManager.UnLock(key, value);
+                success = await _lockManager.UnLockAsync(key, value);
                 _console.WriteLine("{0} {1}", value, success ? "解锁成功" : "解锁失败");
             }
         }
@@ -82,11 +83,11 @@ namespace Redisson.Net.Test
                         {
                             var key = KEY_PREFIX + index;
                             var value = Guid.NewGuid().ToString("N")[..2];
-                            var success = await _lockManager.Lock(key, value,
+                            var success = await _lockManager.LockAsync(key, value,
                                 TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(30));
 
                             if (success)
-                                await _lockManager.UnLock(key, value);
+                                await _lockManager.UnLockAsync(key, value);
                         }));
                     }
                 }
@@ -123,6 +124,40 @@ namespace Redisson.Net.Test
                     Value = value
                 });
                 _console.WriteLine("unlock: " + result);
+            }
+        }
+
+        [Fact]
+        public async Task TestReentryLock()
+        {
+            const string KEY = "REENTRY";
+
+            var success = await _lockManager.LockAsync(KEY, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(30));
+            _console.WriteLine(Thread.CurrentThread.ManagedThreadId + ": " + success);
+            success = await _lockManager.LockAsync(KEY, TimeSpan.FromMinutes(5), TimeSpan.FromSeconds(30));
+            _console.WriteLine(Thread.CurrentThread.ManagedThreadId + ": " + success);
+            success = await _lockManager.LockAsync(KEY, Guid.NewGuid().ToString("N"), TimeSpan.FromMinutes(5),
+                TimeSpan.FromSeconds(1));
+            _console.WriteLine(Thread.CurrentThread.ManagedThreadId + ": " + success);
+
+            await _lockManager.UnLockAsync(KEY);
+            await _lockManager.UnLockAsync(KEY);
+        }
+
+        public async Task Lock11(string key, Func<Task> func)
+        {
+            var value = Guid.NewGuid().ToString("N")[..2];
+            var success = await _lockManager.LockAsync(key, value, TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(30));
+            if (success)
+            {
+                try
+                {
+                    await func();
+                }
+                finally
+                {
+                    await _lockManager.UnLockAsync(key, value);    
+                }
             }
         }
     }

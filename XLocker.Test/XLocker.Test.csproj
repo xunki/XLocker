@@ -21,7 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Redisson.Net\Redisson.Net.csproj" />
+      <ProjectReference Include="..\XLocker\XLocker.csproj" />
     </ItemGroup>
 
 </Project>

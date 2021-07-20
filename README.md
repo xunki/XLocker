@@ -1,12 +1,13 @@
-# Redisson.Net 
+# XLocker
 [English](README_EN.md)
 
-参考 [redisson](https://github.com/redisson/redisson) ，通过 .NET5 实现最基本的分布式锁工具库
+参考 [RedissonLock](https://github.com/redisson/redisson/blob/master/redisson/src/main/java/org/redisson/RedissonLock.java) ，通过 dotnet 实现可等待的分布式锁实现
 
 ### 如何使用
 
 ```c#
-private static readonly LockManager LockManager = LockManager.GetLockManager(StackExchange.Redis.ConnectionMultiplexer.Connect("redis server:port"), "LOCK:");
+// 暂不提供同步方法，可自行实现，此处暂时通过 Task.Result 来获取，演示使用
+private static readonly LockManager _lockManager = LockManager.GetLockManagerAsync(StackExchange.Redis.ConnectionMultiplexer.Connect("redis server:port"), "LOCK:").ConfigureAwait(false).GetAwaiter().GetResult();
 
 /// <summary>
 /// 为执行逻辑加锁 
@@ -14,7 +15,7 @@ private static readonly LockManager LockManager = LockManager.GetLockManager(Sta
 public async Task Lock(string key, Func<Task> func)
 {
     var value = Guid.NewGuid().ToString("N")[..2];
-    var success = await LockManager.Lock(key, value, TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(30));
+    var success = await _lockManager.LockAsync(key, value, TimeSpan.FromMinutes(3), TimeSpan.FromSeconds(30));
     if (success)
     {
         try
@@ -23,21 +24,14 @@ public async Task Lock(string key, Func<Task> func)
         }
         finally
         {
-            await LockManager.UnLock(key, value);    
+            await _lockManager.UnLockAsync(key, value);
         }
     }
 }
 ```
 
-### 开发计划
-
-* [ ] 通过 Redis 脚本执行逻辑，减少请求次数
-* [ ] 使用 Netty 实现 Redis Client，测试性能是否有所改善
-* [ ] 参考 Redisson 提供的 API，进行功能移植
-* [ ] 完善使用文档  (主要是中文)
-
 ### 备注
 
-本项目目前仅做个人的学习，闲余时的尝试，所写代码仅供参考，也可以随意使用
+本项目目前仅做个人的学习，闲余时的尝试，所写代码仅供参考，也可以随意复制、使用
 
 暂时只写了两个工具类 `LockManager` `LockSemaphoreManager` 并依赖 [StackExchange.Redis](https://github.com/StackExchange/StackExchange.Redis) 
